@@ -1,0 +1,223 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // 0. Global Safety Net
+    match /{document=**} { 
+      allow read, write: if false; 
+    }
+
+    // Phase 3: Primitives
+    function isSignedIn() { return request.auth != null; }
+    function isValidId(id) { 
+      return id is string && id.size() > 0 && id.size() <= 128; 
+    }
+    function incoming() { return request.resource.data; }
+    function existing() { return resource.data; }
+
+    function isValidContact(data) {
+      return data.keys().hasAll(['userId', 'name', 'phone']) &&
+             data.userId is string && data.userId == request.auth.uid &&
+             data.name is string && data.name.size() <= 100 &&
+             data.phone is string && data.phone.size() <= 20 &&
+             (data.get('email', '') is string && data.get('email', '').size() <= 100) &&
+             (data.get('source', '') is string && data.get('source', '').size() <= 100) &&
+             (data.get('tags', []) is list && data.get('tags', []).size() <= 20) &&
+             (data.get('lastCall', '') is string && data.get('lastCall', '').size() <= 100) &&
+             data.get('createdAt', request.time) == request.time &&
+             data.get('updatedAt', request.time) == request.time;
+    }
+
+    function isUpdateContactValid(data) {
+      return data.userId == existing().userId &&
+             data.userId == request.auth.uid &&
+             data.get('name', '') is string && data.get('name', '').size() <= 100 &&
+             data.get('phone', '') is string && data.get('phone', '').size() <= 20 &&
+             (data.get('email', '') is string && data.get('email', '').size() <= 100) &&
+             (data.get('source', '') is string && data.get('source', '').size() <= 100) &&
+             (data.get('tags', []) is list && data.get('tags', []).size() <= 20) &&
+             (data.get('lastCall', '') is string && data.get('lastCall', '').size() <= 100) &&
+             data.createdAt == existing().createdAt &&
+             data.updatedAt == request.time;
+    }
+
+    function isValidFlow(data) {
+      return data.keys().hasAll(['userId', 'nodes', 'edges']) &&
+             data.userId is string && data.userId == request.auth.uid &&
+             data.nodes is string && data.nodes.size() <= 1048576 &&
+             data.edges is string && data.edges.size() <= 1048576 &&
+             data.get('createdAt', request.time) == request.time &&
+             data.get('updatedAt', request.time) == request.time;
+    }
+
+    function isUpdateFlowValid(data) {
+      return data.userId == existing().userId &&
+             data.userId == request.auth.uid &&
+             data.get('nodes', '') is string && data.get('nodes', '').size() <= 1048576 &&
+             data.get('edges', '') is string && data.get('edges', '').size() <= 1048576 &&
+             data.createdAt == existing().createdAt &&
+             data.updatedAt == request.time;
+    }
+
+    function isValidCallLog(data) {
+      return data.keys().hasAll(['userId', 'phone', 'time']) &&
+             data.userId is string && data.userId == request.auth.uid &&
+             data.phone is string && data.phone.size() <= 20 &&
+             data.time is string && data.time.size() <= 100 &&
+             (data.get('duration', '') is string && data.get('duration', '').size() <= 50) &&
+             (data.get('status', '') is string && data.get('status', '').size() <= 50) &&
+             (data.get('aiIntent', '') is string && data.get('aiIntent', '').size() <= 100) &&
+             (data.get('hasAudio', false) is bool) &&
+             (data.get('transcript', []) is list && data.get('transcript', []).size() <= 100);
+    }
+    
+    function isValidCampaign(data) {
+      return data.keys().hasAll(['userId', 'name', 'type']) &&
+             data.userId is string && data.userId == request.auth.uid &&
+             data.name is string && data.name.size() <= 255 &&
+             data.type is string && data.type.size() <= 50 &&
+             (data.get('status', '') is string && data.get('status', '').size() <= 50) &&
+             (data.get('progress', 0) is number) &&
+             (data.get('total', 0) is number) &&
+             (data.get('script', '') is string && data.get('script', '').size() <= 1048576) &&
+             data.get('createdAt', request.time) == request.time &&
+             data.get('updatedAt', request.time) == request.time;
+    }
+
+    function isUpdateCampaignValid(data) {
+      return data.userId == existing().userId &&
+             data.userId == request.auth.uid &&
+             data.get('name', '') is string && data.get('name', '').size() <= 255 &&
+             data.get('type', '') is string && data.get('type', '').size() <= 50 &&
+             (data.get('status', '') is string && data.get('status', '').size() <= 50) &&
+             (data.get('progress', 0) is number) &&
+             (data.get('total', 0) is number) &&
+             (data.get('script', '') is string && data.get('script', '').size() <= 1048576) &&
+             data.createdAt == existing().createdAt &&
+             data.updatedAt == request.time;
+    }
+
+    function isValidLead(data) {
+      return data.keys().hasAll(['userId', 'name', 'phone']) &&
+             data.userId is string && data.userId == request.auth.uid &&
+             data.name is string && data.name.size() <= 255 &&
+             data.phone is string && data.phone.size() <= 50 &&
+             (data.get('campaign', '') is string && data.get('campaign', '').size() <= 100) &&
+             (data.get('botIntent', '') is string && data.get('botIntent', '').size() <= 100) &&
+             (data.get('status', '') is string && data.get('status', '').size() <= 50) &&
+             (data.get('note', '') is string && data.get('note', '').size() <= 1000) &&
+             data.get('createdAt', request.time) == request.time &&
+             data.get('updatedAt', request.time) == request.time;
+    }
+
+    function isUpdateLeadValid(data) {
+      return data.userId == existing().userId &&
+             data.userId == request.auth.uid &&
+             data.get('name', '') is string && data.get('name', '').size() <= 255 &&
+             data.get('phone', '') is string && data.get('phone', '').size() <= 50 &&
+             (data.get('campaign', '') is string && data.get('campaign', '').size() <= 100) &&
+             (data.get('botIntent', '') is string && data.get('botIntent', '').size() <= 100) &&
+             (data.get('status', '') is string && data.get('status', '').size() <= 50) &&
+             (data.get('note', '') is string && data.get('note', '').size() <= 1000) &&
+             data.createdAt == existing().createdAt &&
+             data.updatedAt == request.time;
+    }
+
+    function isValidMessage(data) {
+      return data.keys().hasAll(['userId', 'name', 'phone']) &&
+             data.userId is string && data.userId == request.auth.uid &&
+             data.name is string && data.name.size() <= 255 &&
+             data.phone is string && data.phone.size() <= 50 &&
+             (data.get('type', '') is string && data.get('type', '').size() <= 50) &&
+             (data.get('src', '') is string && data.get('src', '').size() <= 255) &&
+             (data.get('status', '') is string && data.get('status', '').size() <= 50) &&
+             (data.get('note', '') is string && data.get('note', '').size() <= 1000) &&
+             data.get('createdAt', request.time) == request.time &&
+             data.get('updatedAt', request.time) == request.time;
+    }
+
+    function isUpdateMessageValid(data) {
+      return data.userId == existing().userId &&
+             data.userId == request.auth.uid &&
+             data.get('name', '') is string && data.get('name', '').size() <= 255 &&
+             data.get('phone', '') is string && data.get('phone', '').size() <= 50 &&
+             (data.get('type', '') is string && data.get('type', '').size() <= 50) &&
+             (data.get('src', '') is string && data.get('src', '').size() <= 255) &&
+             (data.get('status', '') is string && data.get('status', '').size() <= 50) &&
+             (data.get('note', '') is string && data.get('note', '').size() <= 1000) &&
+             data.createdAt == existing().createdAt &&
+             data.updatedAt == request.time;
+    }
+
+    match /users/{userId} {
+      allow read: if isSignedIn() && userId == request.auth.uid;
+      allow write: if false;
+      
+      match /contacts/{contactId} {
+        allow get: if isSignedIn() && userId == request.auth.uid;
+        allow list: if isSignedIn() && userId == request.auth.uid;
+        allow create: if isSignedIn() && userId == request.auth.uid &&
+                         isValidContact(incoming()) && incoming().keys().size() <= 10;
+        allow update: if isSignedIn() && userId == request.auth.uid &&
+                         isUpdateContactValid(incoming()) && 
+                         incoming().diff(existing()).affectedKeys().hasOnly(['name', 'phone', 'email', 'source', 'tags', 'lastCall', 'updatedAt']);
+        allow delete: if isSignedIn() && userId == request.auth.uid;
+      }
+      match /flowData/{flowId} {
+        allow get: if isSignedIn() && userId == request.auth.uid;
+        allow list: if isSignedIn() && userId == request.auth.uid;
+        allow create: if isSignedIn() && userId == request.auth.uid &&
+                         isValidFlow(incoming()) && incoming().keys().size() <= 6;
+        allow update: if isSignedIn() && userId == request.auth.uid &&
+                         isUpdateFlowValid(incoming()) && 
+                         incoming().diff(existing()).affectedKeys().hasOnly(['nodes', 'edges', 'updatedAt']);
+        allow delete: if isSignedIn() && userId == request.auth.uid;
+      }
+      match /call_logs/{logId} {
+        allow get: if isSignedIn() && userId == request.auth.uid;
+        allow list: if isSignedIn() && userId == request.auth.uid;
+        allow create: if isSignedIn() && userId == request.auth.uid &&
+                         isValidCallLog(incoming()) && incoming().keys().size() <= 9;
+        allow update: if false; // Logs shouldn't be updated by users
+        allow delete: if isSignedIn() && userId == request.auth.uid;
+      }
+      match /campaigns/{campaignId} {
+        allow get: if isSignedIn() && userId == request.auth.uid;
+        allow list: if isSignedIn() && userId == request.auth.uid;
+        allow create: if isSignedIn() && userId == request.auth.uid &&
+                         isValidCampaign(incoming()) && incoming().keys().size() <= 10;
+        allow update: if isSignedIn() && userId == request.auth.uid &&
+                         isUpdateCampaignValid(incoming()) && 
+                         incoming().diff(existing()).affectedKeys().hasOnly(['name', 'type', 'status', 'progress', 'total', 'script', 'updatedAt']);
+        allow delete: if isSignedIn() && userId == request.auth.uid;
+      }
+      match /leads/{leadId} {
+        allow get: if isSignedIn() && userId == request.auth.uid;
+        allow list: if isSignedIn() && userId == request.auth.uid;
+        allow create: if isSignedIn() && userId == request.auth.uid &&
+                         isValidLead(incoming()) && incoming().keys().size() <= 9;
+        allow update: if isSignedIn() && userId == request.auth.uid &&
+                         isUpdateLeadValid(incoming()) && 
+                         incoming().diff(existing()).affectedKeys().hasOnly(['name', 'phone', 'campaign', 'botIntent', 'status', 'note', 'updatedAt']);
+        allow delete: if isSignedIn() && userId == request.auth.uid;
+      }
+      match /messages/{messageId} {
+        allow get: if isSignedIn() && userId == request.auth.uid;
+        allow list: if isSignedIn() && userId == request.auth.uid;
+        allow create: if isSignedIn() && userId == request.auth.uid &&
+                         isValidMessage(incoming()) && incoming().keys().size() <= 9;
+        allow update: if isSignedIn() && userId == request.auth.uid &&
+                         isUpdateMessageValid(incoming()) && 
+                         incoming().diff(existing()).affectedKeys().hasOnly(['name', 'phone', 'type', 'src', 'status', 'note', 'updatedAt']);
+        allow delete: if isSignedIn() && userId == request.auth.uid;
+      }
+      match /settings/{settingId} {
+        allow get: if isSignedIn() && userId == request.auth.uid;
+        allow list: if false; // Should not list settings
+        allow create, update: if isSignedIn() && userId == request.auth.uid &&
+                                 (settingId == 'system_config' || settingId == 'ai_config') &&
+                                 incoming().keys().size() <= 10;
+        allow delete: if false;
+      }
+    }
+  }
+}

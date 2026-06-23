@@ -1,0 +1,44 @@
+appId: com.autocall.desktop
+productName: AutoCall
+copyright: Copyright © 2026 AutoCall
+
+directories:
+  output: dist-electron
+  buildResources: build
+
+files:
+  - dist/**/*
+  - electron/**/*
+  - package.json
+
+extraResources:
+  - from: external/KT_Task
+    to: KT_Task
+    filter:
+      - "**/*"
+
+win:
+  target:
+    - target: nsis
+      arch:
+        - x64
+    - target: portable
+      arch:
+        - x64
+  artifactName: AutoCall-${version}-Setup.${ext}
+  forceCodeSigning: false
+
+nsis:
+  oneClick: false
+  allowToChangeInstallationDirectory: true
+  createDesktopShortcut: true
+  createStartMenuShortcut: true
+  shortcutName: AutoCall
+
+portable:
+  artifactName: AutoCall-${version}-Portable.${ext}
+
+asar: true
+
+extraMetadata:
+  main: electron/main.cjs

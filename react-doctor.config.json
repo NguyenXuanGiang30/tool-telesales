@@ -1,0 +1,12 @@
+{
+  "ignore": {
+    "files": [
+      "firestore.rules.test.ts",
+      ".venv/**"
+    ],
+    "rules": [
+      "knip/files",
+      "react-doctor/require-reduced-motion"
+    ]
+  }
+}

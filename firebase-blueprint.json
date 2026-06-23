@@ -1,0 +1,97 @@
+{
+  "entities": {
+    "Campaign": {
+      "title": "Campaign",
+      "description": "Represents a marketing or callbot campaign.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "name": { "type": "string" },
+        "status": { "type": "string", "enum": ["running", "paused", "completed"] },
+        "progress": { "type": "number" },
+        "total": { "type": "number" },
+        "script": { "type": "string" },
+        "type": { "type": "string", "enum": ["callbot", "telesale", "messages"] },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["userId", "name", "status", "progress", "total", "type", "createdAt", "updatedAt"]
+    },
+    "Contact": {
+      "title": "Contact",
+      "description": "A customer contact.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "name": { "type": "string" },
+        "phone": { "type": "string" },
+        "email": { "type": "string" },
+        "source": { "type": "string" },
+        "tags": { 
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "lastCall": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["userId", "name", "phone", "createdAt", "updatedAt"]
+    },
+    "CallLog": {
+      "title": "CallLog",
+      "description": "A log of a phone call made by the bot.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "phone": { "type": "string" },
+        "duration": { "type": "string" },
+        "status": { "type": "string" },
+        "time": { "type": "string" },
+        "aiIntent": { "type": "string" },
+        "hasAudio": { "type": "boolean" },
+        "transcript": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "sender": { "type": "string" },
+              "text": { "type": "string" }
+            }
+          }
+        }
+      },
+      "required": ["userId", "phone", "duration", "status", "time", "hasAudio"]
+    },
+    "FlowData": {
+      "title": "FlowData",
+      "description": "JSON representation of the visual callbot flow nodes and edges.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "nodes": { "type": "string" },
+        "edges": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["userId", "nodes", "edges", "updatedAt"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}/campaigns/{campaignId}": {
+      "schema": { "$ref": "#/entities/Campaign" },
+      "description": "Campaigns created by the user"
+    },
+    "/users/{userId}/contacts/{contactId}": {
+      "schema": { "$ref": "#/entities/Contact" },
+      "description": "Contacts owned by the user"
+    },
+    "/users/{userId}/call_logs/{logId}": {
+      "schema": { "$ref": "#/entities/CallLog" },
+      "description": "Call logs for the user's bot calls"
+    },
+    "/users/{userId}/flowData/{flowDataId}": {
+      "schema": { "$ref": "#/entities/FlowData" },
+      "description": "FlowData corresponding to a campaign"
+    }
+  }
+}
