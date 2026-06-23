@@ -25,6 +25,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from gsm_module import ModernGsmModem, list_ports
 
 from database import init_db, get_db, Campaign, Contact, CallLog, Setting, User, FlowData
+from gateway.api import gateway_api_router
 
 # --- THÊM IMPORT ĐIỀU KHIỂN BOXPHONE ---
 from ws_server import control_server
@@ -583,6 +584,7 @@ def get_devices(db: Session = Depends(get_db)):
 
 
 app.include_router(api_router)
+app.include_router(gateway_api_router)
 
 # =======================================================
 # HÀM TIỆN ÍCH CHO WEBSOCKET
