@@ -93,3 +93,31 @@ def test_runtime_ignores_late_provider_response_after_session_end():
     assert late_response.metadata["ignored"] is True
     assert runtime.get_session("call-1").state == AISessionState.COMPLETED
     assert runtime.get_session("call-1").result.disposition == AIDisposition.COMPLETED
+
+
+def test_runtime_sends_only_completed_turns_in_provider_history():
+    class CapturingProvider:
+        def __init__(self) -> None:
+            self.histories = []
+
+        async def start_session(self, context: ConversationContext) -> DialogReply:
+            return DialogReply(text="hello")
+
+        async def generate_reply(
+            self, context: ConversationContext, turn: TranscriptTurn
+        ) -> DialogReply:
+            self.histories.append(list(context.history))
+            return DialogReply(text=f"reply to {turn.text}", complete=False)
+
+    provider = CapturingProvider()
+    runtime = ConversationRuntime(dialog_provider=provider)
+    run(runtime.start_session(AISessionStart(call_id="call-1", phone_number="0901")))
+
+    run(runtime.handle_transcript("call-1", "first customer turn"))
+    run(runtime.handle_transcript("call-1", "second customer turn"))
+
+    assert provider.histories[0] == []
+    assert provider.histories[1] == [
+        {"role": "user", "content": "first customer turn"},
+        {"role": "assistant", "content": "reply to first customer turn"},
+    ]

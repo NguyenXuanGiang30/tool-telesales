@@ -70,6 +70,20 @@ def make_context() -> ConversationContext:
     return ConversationContext(session=session)
 
 
+def test_local_adapter_returns_configured_greeting_on_start():
+    adapter = LocalModelHTTPAdapter(
+        LocalModelAdapterConfig(
+            base_url="http://127.0.0.1:9",
+            greeting_text="Xin chao tu local model",
+        )
+    )
+
+    reply = run(adapter.start_session(make_context()))
+
+    assert reply.text == "Xin chao tu local model"
+    assert reply.complete is False
+
+
 def test_local_adapter_parses_simple_json_response():
     JsonHandler.status_code = 200
     JsonHandler.response_body = {

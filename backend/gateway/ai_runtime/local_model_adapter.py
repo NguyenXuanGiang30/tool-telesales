@@ -20,6 +20,10 @@ class LocalModelAdapterConfig:
     api_key: str | None = None
     timeout_ms: int = 1200
     max_retries: int = 0
+    greeting_text: str = (
+        "Xin chao, em la tro ly tu dong. "
+        "Em co the trao doi voi minh mot chut duoc khong?"
+    )
 
 
 class LocalModelHTTPAdapter:
@@ -29,7 +33,7 @@ class LocalModelHTTPAdapter:
         self._config = config
 
     async def start_session(self, context: ConversationContext) -> DialogReply:
-        return DialogReply(text="")
+        return DialogReply(text=self._config.greeting_text.strip())
 
     async def generate_reply(
         self, context: ConversationContext, turn: TranscriptTurn

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from dataclasses import replace
 from threading import RLock
 
 from .errors import AISessionAlreadyEndedError, UnknownAISessionError
@@ -58,7 +59,6 @@ class ConversationRuntime:
         audio_frames = await self._tts_provider.synthesize(reply.text, context)
 
         with self._lock:
-            session.add_reply(reply)
             session.state = AISessionState.LISTENING
 
         return AssistantResponse(
@@ -73,10 +73,10 @@ class ConversationRuntime:
             session = self.get_session(call_id)
             if session.state in ENDED_STATES:
                 raise AISessionAlreadyEndedError(call_id)
+            context = ConversationContext(session=self._snapshot_session(session))
             turn = TranscriptTurn(call_id=call_id, text=text)
             session.add_transcript(turn)
             session.state = AISessionState.THINKING
-            context = ConversationContext(session=session)
 
         reply = await self._dialog_provider.generate_reply(context, turn)
 
@@ -90,8 +90,9 @@ class ConversationRuntime:
                 )
             session.add_reply(reply)
             session.state = AISessionState.SPEAKING
+            tts_context = ConversationContext(session=self._snapshot_session(session))
 
-        audio_frames = await self._tts_provider.synthesize(reply.text, context)
+        audio_frames = await self._tts_provider.synthesize(reply.text, tts_context)
 
         with self._lock:
             session = self.get_session(call_id)
@@ -137,4 +138,13 @@ class ConversationRuntime:
             summary=reply.text,
             tags=list(reply.tags),
             next_action=reply.next_action,
+        )
+
+    @staticmethod
+    def _snapshot_session(session: ConversationSession) -> ConversationSession:
+        return replace(
+            session,
+            metadata=dict(session.metadata),
+            transcripts=list(session.transcripts),
+            replies=list(session.replies),
         )

@@ -26,6 +26,9 @@ def test_runtime_adapter_bridge_lifecycle():
     start_res = run(adapter.start_session(event))
     assert start_res["type"] == "session.accepted"
     assert start_res["call_id"] == "call-bridge-1"
+    assert "Xin chao" in start_res["text"]
+    assert start_res["audio"]["frames"] == 0
+    assert start_res["audio_frames"] == []
 
     audio_out = run(adapter.receive_audio("call-bridge-1", b"\x00" * 320))
     assert isinstance(audio_out, list)
@@ -39,3 +42,37 @@ def test_runtime_adapter_bridge_lifecycle():
     assert end_res["call_id"] == "call-bridge-1"
     assert end_res["disposition"] == "interested"
     assert end_res["next_action"] == "send_quote"
+
+
+def test_runtime_adapter_accepts_text_frames_for_deterministic_tests():
+    runtime = ConversationRuntime(dialog_provider=BuiltInConversationAgent())
+    adapter = RuntimeAIAdapter(runtime=runtime)
+    event = AISessionEvent(
+        call_id="call-text-1",
+        phone_number="0987654321",
+        sample_rate=16000,
+        channels=1,
+    )
+    run(adapter.start_session(event))
+
+    frames = run(adapter.receive_audio("call-text-1", b"TEXT:toi quan tam bao gia"))
+
+    assert frames == []
+    assert runtime.get_session("call-text-1").result.disposition.value == "interested"
+
+
+def test_ai_runtime_package_exports_integration_building_blocks():
+    from backend.gateway.ai_runtime import (
+        AudioInputFrame,
+        RuntimeAIAdapter as ExportedRuntimeAIAdapter,
+        StaticTranscriptSTTProvider as ExportedStaticTranscriptSTTProvider,
+    )
+
+    assert ExportedRuntimeAIAdapter is RuntimeAIAdapter
+    assert ExportedStaticTranscriptSTTProvider is StaticTranscriptSTTProvider
+    assert AudioInputFrame(
+        call_id="call-export-1",
+        sequence_number=1,
+        timestamp_ms=20,
+        pcm=b"audio",
+    ).call_id == "call-export-1"

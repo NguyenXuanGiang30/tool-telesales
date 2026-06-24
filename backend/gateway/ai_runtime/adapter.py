@@ -14,7 +14,7 @@ class RuntimeAIAdapter:
         runtime: ConversationRuntime,
         stt_provider: STTProvider | None = None,
     ) -> None:
-        self._runtime = runtime
+        self.runtime = runtime
         self._stt_provider = stt_provider or StaticTranscriptSTTProvider()
         self._seq: dict[str, int] = {}
 
@@ -28,19 +28,28 @@ class RuntimeAIAdapter:
             channels=event.channels,
         )
         self._seq[event.call_id] = 0
-        await self._runtime.start_session(start)
+        response = await self.runtime.start_session(start)
         return {
             "type": "session.accepted",
             "call_id": event.call_id,
+            "text": response.text,
+            "audio_frames": response.audio_frames,
+            "command": response.command,
             "audio": {
                 "sample_rate": event.sample_rate,
                 "channels": event.channels,
                 "codec": "pcm16",
+                "frames": len(response.audio_frames),
             },
         }
 
     async def receive_audio(self, call_id: str, pcm_frame: bytes) -> list[bytes]:
-        session = self._runtime.get_session(call_id)
+        if pcm_frame.startswith(b"TEXT:"):
+            text = pcm_frame.removeprefix(b"TEXT:").decode("utf-8")
+            response = await self.runtime.handle_transcript(call_id, text)
+            return response.audio_frames
+
+        self.runtime.get_session(call_id)
         seq = self._seq.get(call_id, 0)
         self._seq[call_id] = seq + 1
 
@@ -55,10 +64,10 @@ class RuntimeAIAdapter:
         if not turn:
             return []
 
-        response = await self._runtime.handle_transcript(call_id, turn.text)
+        response = await self.runtime.handle_transcript(call_id, turn.text)
         return response.audio_frames
 
     async def end_session(self, call_id: str, reason: str) -> dict[str, Any]:
         self._seq.pop(call_id, None)
-        result = await self._runtime.end_session(call_id, reason)
+        result = await self.runtime.end_session(call_id, reason)
         return result.as_dict()

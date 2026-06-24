@@ -12,13 +12,20 @@ from .errors import (
     UnknownAISessionError,
 )
 from .local_model_adapter import LocalModelAdapterConfig, LocalModelHTTPAdapter
-from .providers import DialogProvider, NoopTTSProvider, STTProvider, TTSProvider
+from .providers import (
+    DialogProvider,
+    NoopTTSProvider,
+    STTProvider,
+    StaticTranscriptSTTProvider,
+    TTSProvider,
+)
 from .schemas import (
     AIDisposition,
     AIResult,
     AISessionStart,
     AISessionState,
     AssistantResponse,
+    AudioInputFrame,
     ConversationContext,
     ConversationSession,
     DialogReply,
@@ -41,9 +48,11 @@ __all__ = [
     "DialogProvider",
     "TTSProvider",
     "NoopTTSProvider",
+    "StaticTranscriptSTTProvider",
     "AISessionState",
     "AIDisposition",
     "AISessionStart",
+    "AudioInputFrame",
     "TranscriptTurn",
     "DialogReply",
     "AssistantResponse",
