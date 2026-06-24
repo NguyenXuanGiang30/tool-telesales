@@ -10,6 +10,7 @@ from .models import CallRequest, DeviceHealth
 from .registry import DeviceRegistry
 from .router import CallRouter
 from .session_manager import CallSessionManager
+from .audio_metrics import AudioMetricsRegistry
 
 
 gateway_api_router = APIRouter(prefix="/gateway", tags=["gateway"])
@@ -17,6 +18,7 @@ gateway_api_router = APIRouter(prefix="/gateway", tags=["gateway"])
 device_registry = DeviceRegistry()
 session_manager = CallSessionManager()
 command_queue = DeviceCommandQueue()
+audio_metrics = AudioMetricsRegistry()
 call_router = CallRouter(
     registry=device_registry,
     sessions=session_manager,
@@ -167,3 +169,8 @@ def complete_gateway_call(call_id: str):
 @gateway_api_router.get("/sessions")
 def list_gateway_sessions():
     return [asdict(session) for session in session_manager.list_sessions()]
+
+
+@gateway_api_router.get("/audio/metrics")
+def list_audio_metrics():
+    return [m.as_dict() for m in audio_metrics.list_all()]

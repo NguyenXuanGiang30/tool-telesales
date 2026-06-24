@@ -146,3 +146,18 @@ def test_next_command_returns_null_when_queue_empty():
 
     assert response.status_code == 200
     assert response.json() == {"command": None}
+
+
+def test_list_audio_metrics_api():
+    from gateway.api import audio_metrics
+    audio_metrics._metrics.clear()
+
+    audio_metrics.record_input(call_id="call-m-1", device_id="s9-m-1", sequence_number=1, byte_count=160)
+    
+    response = client.get("/api/v1/gateway/audio/metrics")
+    assert response.status_code == 200
+    data = response.json()
+    assert len(data) == 1
+    assert data[0]["call_id"] == "call-m-1"
+    assert data[0]["packets_in"] == 1
+
