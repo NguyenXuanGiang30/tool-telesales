@@ -3,7 +3,7 @@ from __future__ import annotations
 from collections import deque
 from threading import RLock
 
-from .models import CallRequest, CallSession
+from .models import CallRequest, CallSession, CallState
 from .registry import DeviceRegistry
 from .session_manager import CallSessionManager
 
@@ -32,6 +32,7 @@ class CallRouter:
     def complete_call(self, call_id: str) -> CallSession | None:
         with self._lock:
             session = self._sessions.get(call_id)
+            self._remove_from_queue(call_id)
             if session.device_id:
                 self._registry.release(session.device_id)
             self._sessions.mark_completed(call_id)
@@ -40,6 +41,7 @@ class CallRouter:
     def fail_call(self, call_id: str, reason: str) -> CallSession | None:
         with self._lock:
             session = self._sessions.get(call_id)
+            self._remove_from_queue(call_id)
             if session.device_id:
                 self._registry.release(session.device_id)
             self._sessions.mark_failed(call_id, reason)
@@ -48,10 +50,18 @@ class CallRouter:
     def _allocate_next_queued(self) -> CallSession | None:
         while self._queue:
             call_id = self._queue.popleft()
+            if self._sessions.get(call_id).state != CallState.QUEUED:
+                continue
             allocated = self._try_allocate(call_id)
             if allocated:
                 return allocated
         return None
+
+    def _remove_from_queue(self, call_id: str) -> None:
+        try:
+            self._queue.remove(call_id)
+        except ValueError:
+            return
 
     def _try_allocate(self, call_id: str) -> CallSession | None:
         device = self._registry.find_available_device()

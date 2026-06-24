@@ -45,3 +45,31 @@ def test_complete_call_releases_device_and_allocates_next_queued_call():
     assert next_session.call_id == queued.call_id
     assert next_session.state == CallState.DIALING
     assert registry.get_device("S9_01").active_call_id == queued.call_id
+
+
+def test_complete_queued_call_does_not_allocate_completed_session():
+    router, registry, sessions = make_router()
+    queued = router.enqueue_and_allocate(CallRequest(phone_number="0900000001"))
+    registry.register_device("S9_01", "192.168.1.10", audio_port=50001)
+
+    next_session = router.complete_call(queued.call_id)
+
+    assert next_session is None
+    assert sessions.get(queued.call_id).state == CallState.COMPLETED
+    assert router.queue_size == 0
+    assert registry.get_device("S9_01").status == DeviceStatus.IDLE
+    assert registry.get_device("S9_01").active_call_id is None
+
+
+def test_fail_queued_call_does_not_allocate_failed_session():
+    router, registry, sessions = make_router()
+    queued = router.enqueue_and_allocate(CallRequest(phone_number="0900000001"))
+    registry.register_device("S9_01", "192.168.1.10", audio_port=50001)
+
+    next_session = router.fail_call(queued.call_id, "cancelled")
+
+    assert next_session is None
+    assert sessions.get(queued.call_id).state == CallState.FAILED
+    assert router.queue_size == 0
+    assert registry.get_device("S9_01").status == DeviceStatus.IDLE
+    assert registry.get_device("S9_01").active_call_id is None
