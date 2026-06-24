@@ -128,6 +128,19 @@ def test_builtin_agent_refusal_wins_over_interested_keywords():
     assert reply.next_action == "none"
 
 
+def test_builtin_agent_refusal_wins_over_callback_keywords():
+    agent = BuiltInConversationAgent()
+    context = make_context()
+    turn = TranscriptTurn(call_id="call-1", text="đừng gọi lại cho tôi")
+
+    reply = run(agent.generate_reply(context, turn))
+
+    assert reply.disposition == AIDisposition.NOT_INTERESTED
+    assert reply.tags == ["not_interested"]
+    assert reply.next_action == "none"
+    assert reply.complete is True
+
+
 def test_noop_tts_provider_returns_empty_audio_frames():
     provider = NoopTTSProvider()
     context = make_context()

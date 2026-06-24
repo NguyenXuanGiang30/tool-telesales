@@ -34,20 +34,20 @@ class BuiltInConversationAgent:
                 complete=True,
             )
 
+        if self._contains_any(text, ("khong can", "dung goi", "khong quan tam")):
+            return DialogReply(
+                text="Da, em xin phep ghi nhan va khong lam phien minh nua.",
+                disposition=AIDisposition.NOT_INTERESTED,
+                tags=["not_interested"],
+                complete=True,
+            )
+
         if self._contains_any(text, ("goi lai", "luc khac", "goi sau")):
             return DialogReply(
                 text="Da, em se sap xep goi lai cho minh vao luc phu hop.",
                 disposition=AIDisposition.CALLBACK,
                 tags=["callback"],
                 next_action="schedule_callback",
-                complete=True,
-            )
-
-        if self._contains_any(text, ("khong can", "dung goi", "khong quan tam")):
-            return DialogReply(
-                text="Da, em xin phep ghi nhan va khong lam phien minh nua.",
-                disposition=AIDisposition.NOT_INTERESTED,
-                tags=["not_interested"],
                 complete=True,
             )
 
