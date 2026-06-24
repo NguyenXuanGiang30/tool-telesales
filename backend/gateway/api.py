@@ -5,6 +5,7 @@ from dataclasses import asdict
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 
+from .command_queue import DeviceCommandQueue
 from .models import CallRequest, DeviceHealth
 from .registry import DeviceRegistry
 from .router import CallRouter
@@ -15,7 +16,12 @@ gateway_api_router = APIRouter(prefix="/gateway", tags=["gateway"])
 
 device_registry = DeviceRegistry()
 session_manager = CallSessionManager()
-call_router = CallRouter(registry=device_registry, sessions=session_manager)
+command_queue = DeviceCommandQueue()
+call_router = CallRouter(
+    registry=device_registry,
+    sessions=session_manager,
+    command_queue=command_queue,
+)
 
 
 class RegisterDevicePayload(BaseModel):
@@ -39,6 +45,18 @@ class DialPayload(BaseModel):
     campaign_id: str | None = None
     lead_id: str | None = None
     metadata: dict = Field(default_factory=dict)
+
+
+class CommandAckPayload(BaseModel):
+    status: str
+    error: str | None = None
+
+
+def _ensure_device_exists(device_id: str) -> None:
+    try:
+        device_registry.get_device(device_id)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail="Device not found") from exc
 
 
 @gateway_api_router.get("/devices")
@@ -83,6 +101,42 @@ def update_gateway_device_health(device_id: str, payload: HealthPayload):
     except KeyError as exc:
         raise HTTPException(status_code=404, detail="Device not found") from exc
     return asdict(device)
+
+
+@gateway_api_router.get("/devices/{device_id}/commands/next")
+def next_gateway_device_command(device_id: str):
+    _ensure_device_exists(device_id)
+    command = command_queue.next_for_device(device_id)
+    return {"command": command.as_dict() if command else None}
+
+
+@gateway_api_router.get("/devices/{device_id}/commands")
+def list_gateway_device_commands(device_id: str):
+    _ensure_device_exists(device_id)
+    return [command.as_dict() for command in command_queue.list_for_device(device_id)]
+
+
+@gateway_api_router.post("/devices/{device_id}/commands/{command_id}/ack")
+def ack_gateway_device_command(
+    device_id: str, command_id: str, payload: CommandAckPayload
+):
+    _ensure_device_exists(device_id)
+    try:
+        if payload.status == "acked":
+            command = command_queue.ack(device_id, command_id)
+        elif payload.status == "nacked":
+            command = command_queue.nack(
+                device_id,
+                command_id,
+                payload.error or "device_nacked_command",
+            )
+        else:
+            raise HTTPException(
+                status_code=400, detail="status must be 'acked' or 'nacked'"
+            )
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail="Command not found") from exc
+    return command.as_dict()
 
 
 @gateway_api_router.post("/calls/dial")
