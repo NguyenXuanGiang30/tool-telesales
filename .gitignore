@@ -3,6 +3,8 @@ build/
 dist/
 dist-electron/
 coverage/
+.pytest_cache/
+.venv/
 .DS_Store
 *.log
 .env*

@@ -584,7 +584,7 @@ def get_devices(db: Session = Depends(get_db)):
 
 
 app.include_router(api_router)
-app.include_router(gateway_api_router)
+app.include_router(gateway_api_router, prefix="/api/v1")
 
 # =======================================================
 # HÀM TIỆN ÍCH CHO WEBSOCKET

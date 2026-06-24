@@ -26,7 +26,7 @@ client = TestClient(app)
 
 def test_register_device_api():
     response = client.post(
-        "/gateway/devices/register",
+        "/api/v1/gateway/devices/register",
         json={
             "device_id": "S9_01",
             "ip_address": "192.168.1.10",
@@ -41,7 +41,7 @@ def test_register_device_api():
 def test_dial_call_api():
     # Register first
     client.post(
-        "/gateway/devices/register",
+        "/api/v1/gateway/devices/register",
         json={
             "device_id": "S9_01",
             "ip_address": "192.168.1.10",
@@ -50,7 +50,7 @@ def test_dial_call_api():
     )
     
     response = client.post(
-        "/gateway/calls/dial",
+        "/api/v1/gateway/calls/dial",
         json={
             "phone_number": "0987654321",
             "campaign_id": "camp-1"

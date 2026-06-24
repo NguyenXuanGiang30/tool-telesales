@@ -3,7 +3,7 @@ from __future__ import annotations
 from dataclasses import asdict
 
 from fastapi import APIRouter, HTTPException
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from .models import CallRequest, DeviceHealth
 from .registry import DeviceRegistry
@@ -38,7 +38,7 @@ class DialPayload(BaseModel):
     phone_number: str
     campaign_id: str | None = None
     lead_id: str | None = None
-    metadata: dict = {}
+    metadata: dict = Field(default_factory=dict)
 
 
 @gateway_api_router.get("/devices")
