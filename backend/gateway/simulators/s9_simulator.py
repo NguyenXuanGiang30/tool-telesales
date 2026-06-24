@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
-from backend.gateway.models import DeviceEventType, DeviceHealth
+from backend.gateway.models import CommandName, DeviceEventType, DeviceHealth
 
 
 @dataclass
@@ -53,6 +53,58 @@ class S9Simulator:
                 "network_type": health.network_type,
                 "storage_free_mb": health.storage_free_mb,
             },
+        }
+        self.events.append(event)
+        return event
+
+    def ack_command(self, command: dict) -> dict:
+        command_name = command.get("command")
+        if command_name not in {item.value for item in CommandName}:
+            return {
+                "command_id": command["command_id"],
+                "status": "nacked",
+                "error": f"unsupported_command:{command_name}",
+            }
+        return {
+            "command_id": command["command_id"],
+            "status": "acked",
+            "error": None,
+        }
+
+    def handle_command(self, command: dict) -> dict:
+        command_name = command.get("command")
+        if command_name == CommandName.DIAL.value:
+            call_id = str(command["call_id"])
+            self.active_call_id = call_id
+            event = {
+                "type": "event",
+                "event": DeviceEventType.RINGING.value,
+                "device_id": self.device_id,
+                "call_id": call_id,
+                "payload": {
+                    "phone_number": command.get("payload", {}).get("phone_number"),
+                },
+            }
+            self.events.append(event)
+            return event
+        if command_name == CommandName.HANGUP.value:
+            call_id = command.get("call_id") or self.active_call_id
+            self.active_call_id = None
+            event = {
+                "type": "event",
+                "event": DeviceEventType.DISCONNECTED.value,
+                "device_id": self.device_id,
+                "call_id": call_id,
+                "payload": {"reason": "hangup_command"},
+            }
+            self.events.append(event)
+            return event
+        event = {
+            "type": "event",
+            "event": DeviceEventType.ERROR.value,
+            "device_id": self.device_id,
+            "call_id": command.get("call_id"),
+            "payload": {"reason": f"unsupported_command:{command_name}"},
         }
         self.events.append(event)
         return event
