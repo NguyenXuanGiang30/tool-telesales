@@ -5,6 +5,7 @@ dist-electron/
 coverage/
 .pytest_cache/
 .venv/
+.python*/
 .DS_Store
 *.log
 .env*
