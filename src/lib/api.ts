@@ -111,3 +111,82 @@ export function testGsmConnection(port: string, baudRate: number) {
     body: JSON.stringify({ port, baud_rate: baudRate }),
   });
 }
+
+// --- GATEWAY / BOXPHONE OPERATIONAL INTERFACES ---
+export interface GatewayDevice {
+  device_id: string;
+  ip_address: string;
+  app_version?: string | null;
+  audio_port?: number | null;
+  status: 'idle' | 'busy' | 'degraded' | 'offline';
+  active_call_id?: string | null;
+  last_heartbeat_at: string;
+  health: {
+    battery_percent?: number | null;
+    temperature_c?: number | null;
+    signal_dbm?: number | null;
+    charging?: boolean | null;
+    network_type?: string | null;
+    storage_free_mb?: number | null;
+  };
+}
+
+export interface GatewayCallSession {
+  call_id: string;
+  phone_number: string;
+  state: 'queued' | 'dialing' | 'ringing' | 'connected' | 'ai_listening' | 'ai_thinking' | 'ai_speaking' | 'completed' | 'failed';
+  device_id?: string | null;
+  sim_slot?: number | null;
+  campaign_id?: string | null;
+  lead_id?: string | null;
+  created_at: string;
+  dialed_at?: string | null;
+  connected_at?: string | null;
+  ended_at?: string | null;
+  failure_reason?: string | null;
+}
+
+export interface GatewayDeviceCommand {
+  command_id: string;
+  device_id: string;
+  command: string;
+  call_id?: string | null;
+  payload: Record<string, any>;
+  status: 'queued' | 'delivered' | 'acked' | 'nacked' | 'expired' | 'failed';
+  attempt_count: number;
+  created_at: string;
+  delivered_at?: string | null;
+  acknowledged_at?: string | null;
+  expires_at?: string | null;
+  last_error?: string | null;
+}
+
+export interface AudioSessionMetrics {
+  call_id: string;
+  device_id: string;
+  packets_in: number;
+  packets_out: number;
+  bytes_in: number;
+  bytes_out: number;
+  last_input_sequence?: number | null;
+  dropped_input_sequences: number;
+  last_packet_at?: string | null;
+  last_error?: string | null;
+}
+
+// --- GATEWAY FETCH FUNCTIONS ---
+export function listGatewayDevices() {
+  return apiFetch<GatewayDevice[]>('/gateway/devices');
+}
+
+export function listGatewaySessions() {
+  return apiFetch<GatewayCallSession[]>('/gateway/sessions');
+}
+
+export function listGatewayDeviceCommands(deviceId: string) {
+  return apiFetch<GatewayDeviceCommand[]>(`/gateway/devices/${encodeURIComponent(deviceId)}/commands`);
+}
+
+export function listAudioMetrics() {
+  return apiFetch<AudioSessionMetrics[]>('/gateway/audio/metrics');
+}
