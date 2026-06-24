@@ -1,4 +1,5 @@
-from backend.gateway.models import CallRequest, CallState, DeviceStatus
+from backend.gateway.command_queue import DeviceCommandQueue
+from backend.gateway.models import CallRequest, CallState, CommandName, DeviceStatus
 from backend.gateway.registry import DeviceRegistry
 from backend.gateway.router import CallRouter
 from backend.gateway.session_manager import CallSessionManager
@@ -73,3 +74,25 @@ def test_fail_queued_call_does_not_allocate_failed_session():
     assert router.queue_size == 0
     assert registry.get_device("S9_01").status == DeviceStatus.IDLE
     assert registry.get_device("S9_01").active_call_id is None
+
+
+def test_route_call_enqueues_dial_command_for_allocated_device():
+    registry = DeviceRegistry()
+    sessions = CallSessionManager()
+    commands = DeviceCommandQueue()
+    router = CallRouter(registry=registry, sessions=sessions, command_queue=commands)
+    registry.register_device("S9_01", "192.168.1.10", audio_port=50001)
+
+    session = router.enqueue_and_allocate(CallRequest(phone_number="0901000001"))
+    command = commands.next_for_device("S9_01")
+
+    assert command is not None
+    assert command.command == CommandName.DIAL
+    assert command.device_id == "S9_01"
+    assert command.call_id == session.call_id
+    assert command.payload == {
+        "phone_number": "0901000001",
+        "sim_slot": session.sim_slot,
+        "audio_in_port": 50001,
+        "audio_out_port": 50001,
+    }

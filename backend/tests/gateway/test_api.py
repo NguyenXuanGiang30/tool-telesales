@@ -66,3 +66,83 @@ def test_dial_call_api():
     assert data["phone_number"] == "0987654321"
     assert data["state"] == "dialing"
     assert data["device_id"] == "S9_01"
+
+
+def test_dial_allocated_call_exposes_next_device_command():
+    client.post(
+        "/api/v1/gateway/devices/register",
+        json={
+            "device_id": "S9_COMMAND_01",
+            "ip_address": "192.168.1.50",
+            "audio_port": 50100,
+        },
+    )
+
+    dial_response = client.post(
+        "/api/v1/gateway/calls/dial",
+        json={"phone_number": "0901000001"},
+    )
+    call_id = dial_response.json()["call_id"]
+
+    command_response = client.get(
+        "/api/v1/gateway/devices/S9_COMMAND_01/commands/next"
+    )
+
+    assert command_response.status_code == 200
+    body = command_response.json()
+    assert body["command"]["command"] == "DIAL"
+    assert body["command"]["device_id"] == "S9_COMMAND_01"
+    assert body["command"]["call_id"] == call_id
+    assert body["command"]["payload"]["phone_number"] == "0901000001"
+    assert body["command"]["status"] == "delivered"
+
+
+def test_device_can_ack_and_nack_commands():
+    client.post(
+        "/api/v1/gateway/devices/register",
+        json={"device_id": "S9_COMMAND_02", "ip_address": "192.168.1.51"},
+    )
+    client.post("/api/v1/gateway/calls/dial", json={"phone_number": "0901000002"})
+    command = client.get(
+        "/api/v1/gateway/devices/S9_COMMAND_02/commands/next"
+    ).json()["command"]
+
+    ack_response = client.post(
+        f"/api/v1/gateway/devices/S9_COMMAND_02/commands/{command['command_id']}/ack",
+        json={"status": "acked"},
+    )
+
+    assert ack_response.status_code == 200
+    assert ack_response.json()["status"] == "acked"
+
+    client.post(
+        "/api/v1/gateway/devices/register",
+        json={"device_id": "S9_COMMAND_03", "ip_address": "192.168.1.52"},
+    )
+    client.post("/api/v1/gateway/calls/dial", json={"phone_number": "0901000003"})
+    command = client.get(
+        "/api/v1/gateway/devices/S9_COMMAND_03/commands/next"
+    ).json()["command"]
+
+    nack_response = client.post(
+        f"/api/v1/gateway/devices/S9_COMMAND_03/commands/{command['command_id']}/ack",
+        json={"status": "nacked", "error": "telephony_failed"},
+    )
+
+    assert nack_response.status_code == 200
+    assert nack_response.json()["status"] == "nacked"
+    assert nack_response.json()["last_error"] == "telephony_failed"
+
+
+def test_next_command_returns_null_when_queue_empty():
+    client.post(
+        "/api/v1/gateway/devices/register",
+        json={"device_id": "S9_COMMAND_EMPTY", "ip_address": "192.168.1.53"},
+    )
+
+    response = client.get(
+        "/api/v1/gateway/devices/S9_COMMAND_EMPTY/commands/next"
+    )
+
+    assert response.status_code == 200
+    assert response.json() == {"command": None}

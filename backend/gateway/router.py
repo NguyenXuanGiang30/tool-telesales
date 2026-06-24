@@ -3,15 +3,22 @@ from __future__ import annotations
 from collections import deque
 from threading import RLock
 
-from .models import CallRequest, CallSession, CallState
+from .command_queue import DeviceCommandQueue
+from .models import CallRequest, CallSession, CallState, CommandName
 from .registry import DeviceRegistry
 from .session_manager import CallSessionManager
 
 
 class CallRouter:
-    def __init__(self, registry: DeviceRegistry, sessions: CallSessionManager) -> None:
+    def __init__(
+        self,
+        registry: DeviceRegistry,
+        sessions: CallSessionManager,
+        command_queue: DeviceCommandQueue | None = None,
+    ) -> None:
         self._registry = registry
         self._sessions = sessions
+        self._command_queue = command_queue
         self._queue: deque[str] = deque()
         self._lock = RLock()
 
@@ -69,12 +76,29 @@ class CallRouter:
             return None
         sim_slot = self._select_sim_slot(device)
         self._registry.mark_busy(device.device_id, call_id)
-        return self._sessions.attach_device(
+        session = self._sessions.attach_device(
             call_id=call_id,
             device_id=device.device_id,
             sim_slot=sim_slot,
             audio_in_port=device.audio_port,
             audio_out_port=device.audio_port,
+        )
+        self._enqueue_dial_command(session)
+        return session
+
+    def _enqueue_dial_command(self, session: CallSession) -> None:
+        if not self._command_queue or not session.device_id:
+            return
+        self._command_queue.enqueue(
+            device_id=session.device_id,
+            command=CommandName.DIAL,
+            call_id=session.call_id,
+            payload={
+                "phone_number": session.phone_number,
+                "sim_slot": session.sim_slot,
+                "audio_in_port": session.audio_in_port,
+                "audio_out_port": session.audio_out_port,
+            },
         )
 
     @staticmethod
