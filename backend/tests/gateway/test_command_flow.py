@@ -35,6 +35,12 @@ client = TestClient(app)
 
 
 def test_gateway_to_simulator_dial_command_flow():
+    from gateway.api import device_registry, session_manager, command_queue
+    device_registry._devices.clear()
+    session_manager._sessions.clear()
+    command_queue._commands.clear()
+    command_queue._order.clear()
+
     simulator = S9Simulator("S9_E2E_01", "192.168.1.70", audio_port=50300)
     register = simulator.register_event()
 

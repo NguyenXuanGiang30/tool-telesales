@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 
 from backend.gateway.models import CommandName, DeviceEventType, DeviceHealth
+from backend.gateway.audio_protocol import AudioDirection, AudioPacket
 
 
 @dataclass
@@ -132,3 +133,24 @@ class S9Simulator:
         }
         self.events.append(event)
         return event
+
+    def customer_text_packet(
+        self,
+        call_id: str,
+        text: str,
+        sequence_number: int = 1,
+        timestamp_ms: int = 20,
+        sample_rate: int = 16000,
+        channels: int = 1,
+    ) -> AudioPacket:
+        payload = f"TEXT:{text}".encode("utf-8")
+        return AudioPacket(
+            direction=AudioDirection.CUSTOMER_TO_AI,
+            call_id=call_id,
+            device_id=self.device_id,
+            sequence_number=sequence_number,
+            timestamp_ms=timestamp_ms,
+            sample_rate=sample_rate,
+            channels=channels,
+            payload=payload,
+        )
