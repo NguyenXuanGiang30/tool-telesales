@@ -145,6 +145,9 @@ def test_local_adapter_retries_http_5xx_then_succeeds():
         def do_POST(self):
             attempts["count"] += 1
             if attempts["count"] == 1:
+                length = int(self.headers.get("Content-Length", "0"))
+                if length > 0:
+                    self.rfile.read(length)
                 self.send_response(500)
                 self.end_headers()
                 self.wfile.write(b"temporary failure")

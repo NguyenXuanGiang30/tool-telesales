@@ -39,6 +39,7 @@ class _AgentHomeScreenState extends State<AgentHomeScreen> {
   final _controller = AgentController();
   final _gatewayUrlController = TextEditingController();
   final _deviceIdController = TextEditingController();
+  final _deviceTokenController = TextEditingController();
   final _audioPortController = TextEditingController();
   final _simSlotController = TextEditingController();
 
@@ -57,6 +58,7 @@ class _AgentHomeScreenState extends State<AgentHomeScreen> {
     final config = await ConfigStore.loadConfig();
     _gatewayUrlController.text = config['gatewayUrl'];
     _deviceIdController.text = config['deviceId'];
+    _deviceTokenController.text = config['deviceToken'];
     _audioPortController.text = config['audioPort'].toString();
     _simSlotController.text = config['simSlot'].toString();
   }
@@ -64,12 +66,14 @@ class _AgentHomeScreenState extends State<AgentHomeScreen> {
   Future<void> _saveAndStartAgent() async {
     final gatewayUrl = _gatewayUrlController.text.trim();
     final deviceId = _deviceIdController.text.trim();
+    final deviceToken = _deviceTokenController.text.trim();
     final audioPort = int.tryParse(_audioPortController.text) ?? 28000;
     final simSlot = int.tryParse(_simSlotController.text) ?? 1;
 
     await ConfigStore.saveConfig(
       gatewayUrl: gatewayUrl,
       deviceId: deviceId,
+      deviceToken: deviceToken,
       audioPort: audioPort,
       simSlot: simSlot,
     );
@@ -77,6 +81,7 @@ class _AgentHomeScreenState extends State<AgentHomeScreen> {
     await _controller.start({
       'gatewayUrl': gatewayUrl,
       'deviceId': deviceId,
+      'deviceToken': deviceToken,
       'audioPort': audioPort,
       'simSlot': simSlot,
     });
@@ -92,6 +97,7 @@ class _AgentHomeScreenState extends State<AgentHomeScreen> {
     _controller.stop();
     _gatewayUrlController.dispose();
     _deviceIdController.dispose();
+    _deviceTokenController.dispose();
     _audioPortController.dispose();
     _simSlotController.dispose();
     super.dispose();
@@ -297,6 +303,17 @@ class _AgentHomeScreenState extends State<AgentHomeScreen> {
               enabled: enabled,
               decoration: const InputDecoration(
                 labelText: 'Device Identifier (ID)',
+                border: OutlineInputBorder(),
+                isDense: true,
+              ),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: _deviceTokenController,
+              enabled: enabled,
+              obscureText: true,
+              decoration: const InputDecoration(
+                labelText: 'Device Token',
                 border: OutlineInputBorder(),
                 isDense: true,
               ),

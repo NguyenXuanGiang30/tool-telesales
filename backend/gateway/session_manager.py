@@ -33,6 +33,10 @@ class CallSessionManager:
         with self._lock:
             return list(self._sessions.values())
 
+    def replace_sessions(self, sessions: list[CallSession]) -> None:
+        with self._lock:
+            self._sessions = {session.call_id: session for session in sessions}
+
     def set_state(self, call_id: str, state: CallState) -> CallSession:
         with self._lock:
             session = self._sessions[call_id]

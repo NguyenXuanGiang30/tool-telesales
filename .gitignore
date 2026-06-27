@@ -4,6 +4,7 @@ dist/
 dist-electron/
 coverage/
 .pytest_cache/
+.pytest_basetemp/
 .venv/
 .python*/
 .DS_Store

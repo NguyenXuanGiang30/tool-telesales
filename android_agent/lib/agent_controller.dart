@@ -16,6 +16,7 @@ enum AgentState {
 class AgentController extends ChangeNotifier {
   String gatewayUrl = 'http://10.0.2.2:8000/api/v1';
   String deviceId = 'S9_AGENT_01';
+  String deviceToken = '';
   int audioPort = 28000;
   int simSlot = 1;
 
@@ -77,13 +78,20 @@ class AgentController extends ChangeNotifier {
 
     gatewayUrl = config['gatewayUrl'];
     deviceId = config['deviceId'];
+    deviceToken = config['deviceToken'] ?? '';
     audioPort = config['audioPort'];
     simSlot = config['simSlot'];
 
-    _client = GatewayClient(baseUrl: gatewayUrl, deviceId: deviceId);
+    _client = GatewayClient(
+      baseUrl: gatewayUrl,
+      deviceId: deviceId,
+      deviceToken: deviceToken,
+    );
     _isPolling = true;
     _state = AgentState.registering;
-    addLog('Starting agent polling loop. Device ID: $deviceId, Gateway: $gatewayUrl');
+    addLog(
+      'Starting agent polling loop. Device ID: $deviceId, Gateway: $gatewayUrl',
+    );
     notifyListeners();
 
     // Perform initial registration
@@ -128,17 +136,7 @@ class AgentController extends ChangeNotifier {
   Future<void> _heartbeat() async {
     if (_client == null || _state == AgentState.registering) return;
     
-    // Status mapped to Gateway expected values: idle, busy, degraded, offline
-    String status = 'idle';
-    if (_state == AgentState.dialing || _state == AgentState.ringing || _state == AgentState.connected) {
-      status = 'busy';
-    } else if (batteryPercent < 15 || temperatureC > 45) {
-      status = 'degraded';
-    }
-
     final ok = await _client!.sendHeartbeat(
-      status: status,
-      activeCallId: _activeCallId,
       batteryPercent: batteryPercent,
       temperatureC: temperatureC,
       signalDbm: signalDbm,

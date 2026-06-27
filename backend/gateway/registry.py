@@ -48,6 +48,10 @@ class DeviceRegistry:
         with self._lock:
             return list(self._devices.values())
 
+    def replace_devices(self, devices: list[DeviceRecord]) -> None:
+        with self._lock:
+            self._devices = {device.device_id: device for device in devices}
+
     def heartbeat(self, device_id: str) -> DeviceRecord:
         with self._lock:
             device = self._devices[device_id]

@@ -1,6 +1,7 @@
 fastapi==0.104.1
 uvicorn==0.24.0.post1
 pydantic==2.5.2
+httpx==0.28.1
 python-multipart==0.0.6
 psutil==5.9.6
 pyserial==3.5

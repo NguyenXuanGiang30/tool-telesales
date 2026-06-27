@@ -109,6 +109,15 @@ class DeviceCommandQueue:
                 if self._commands[command_id].device_id == device_id
             ]
 
+    def list_all(self) -> list[DeviceCommand]:
+        with self._lock:
+            return [self._commands[command_id] for command_id in self._order]
+
+    def replace_commands(self, commands: list[DeviceCommand]) -> None:
+        with self._lock:
+            self._commands = {command.command_id: command for command in commands}
+            self._order = [command.command_id for command in commands]
+
     def next_for_device(
         self, device_id: str, now: datetime | None = None
     ) -> DeviceCommand | None:

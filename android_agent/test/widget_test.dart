@@ -11,6 +11,7 @@ void main() {
 
     // Verify that sections are rendered correctly.
     expect(find.text('Gateway Connection Settings'), findsOneWidget);
+    expect(find.text('Device Token'), findsOneWidget);
     expect(find.text('Telephony Simulator Boundary'), findsOneWidget);
     expect(find.text('Device Hardware Health Simulator'), findsOneWidget);
   });

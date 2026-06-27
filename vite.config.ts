@@ -12,6 +12,12 @@ export default defineConfig(({mode}) => {
     test: {
       globals: true,
       environment: 'jsdom',
+      exclude: [
+        '**/node_modules/**',
+        '**/dist/**',
+        '**/.worktrees/**',
+        '**/firestore.rules.test.ts',
+      ],
     },
     define: {
       'process.env.GEMINI_API_KEY': JSON.stringify(env.GEMINI_API_KEY),

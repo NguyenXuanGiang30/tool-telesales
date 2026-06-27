@@ -4,8 +4,20 @@ import 'package:http/http.dart' as http;
 class GatewayClient {
   final String baseUrl;
   final String deviceId;
+  final String deviceToken;
 
-  GatewayClient({required this.baseUrl, required this.deviceId});
+  GatewayClient({
+    required this.baseUrl,
+    required this.deviceId,
+    this.deviceToken = '',
+  });
+
+  Map<String, String> _jsonHeaders() {
+    return {
+      'Content-Type': 'application/json',
+      if (deviceToken.isNotEmpty) 'X-Device-Token': deviceToken,
+    };
+  }
 
   Future<bool> registerDevice({
     required String ipAddress,
@@ -15,12 +27,13 @@ class GatewayClient {
     try {
       final response = await http.post(
         Uri.parse('$baseUrl/devices/register'),
-        headers: {'Content-Type': 'application/json'},
+        headers: _jsonHeaders(),
         body: jsonEncode({
           'device_id': deviceId,
           'ip_address': ipAddress,
           'app_version': appVersion,
           'audio_port': audioPort,
+          if (deviceToken.isNotEmpty) 'device_token': deviceToken,
         }),
       );
       return response.statusCode == 200;
@@ -30,8 +43,6 @@ class GatewayClient {
   }
 
   Future<bool> sendHeartbeat({
-    required String status,
-    required String? activeCallId,
     required int batteryPercent,
     required double temperatureC,
     required int signalDbm,
@@ -40,23 +51,27 @@ class GatewayClient {
     required int storageFreeMb,
   }) async {
     try {
-      final response = await http.post(
+      final heartbeatResponse = await http.post(
         Uri.parse('$baseUrl/devices/$deviceId/heartbeat'),
-        headers: {'Content-Type': 'application/json'},
+        headers: _jsonHeaders(),
+      );
+      if (heartbeatResponse.statusCode != 200) {
+        return false;
+      }
+
+      final healthResponse = await http.post(
+        Uri.parse('$baseUrl/devices/$deviceId/health'),
+        headers: _jsonHeaders(),
         body: jsonEncode({
-          'status': status,
-          'active_call_id': activeCallId,
-          'health': {
-            'battery_percent': batteryPercent,
-            'temperature_c': temperatureC,
-            'signal_dbm': signalDbm,
-            'charging': charging,
-            'network_type': networkType,
-            'storage_free_mb': storageFreeMb,
-          }
+          'battery_percent': batteryPercent,
+          'temperature_c': temperatureC,
+          'signal_dbm': signalDbm,
+          'charging': charging,
+          'network_type': networkType,
+          'storage_free_mb': storageFreeMb,
         }),
       );
-      return response.statusCode == 200;
+      return healthResponse.statusCode == 200;
     } catch (_) {
       return false;
     }
@@ -66,6 +81,7 @@ class GatewayClient {
     try {
       final response = await http.get(
         Uri.parse('$baseUrl/devices/$deviceId/commands/next'),
+        headers: _jsonHeaders(),
       );
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
@@ -85,7 +101,7 @@ class GatewayClient {
     try {
       final response = await http.post(
         Uri.parse('$baseUrl/devices/$deviceId/commands/$commandId/ack'),
-        headers: {'Content-Type': 'application/json'},
+        headers: _jsonHeaders(),
         body: jsonEncode({
           'status': status,
           'error': error,
