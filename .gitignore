@@ -9,6 +9,7 @@ coverage/
 .python*/
 .DS_Store
 *.log
+*.apk
 .env*
 !.env.example
 
