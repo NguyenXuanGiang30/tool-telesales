@@ -1,0 +1,37 @@
+fastapi==0.104.1
+uvicorn==0.24.0.post1
+pydantic==2.5.2
+httpx==0.28.1
+python-multipart==0.0.6
+psutil==5.9.6
+pyserial==3.5
+
+# ----------------------------------------------------
+# AI DEEP LEARNING LIBRARIES
+# ----------------------------------------------------
+
+# PyTorch with Cuda 12.1
+--extra-index-url https://download.pytorch.org/whl/cu121
+torch>=2.1.0
+torchvision>=0.16.0
+torchaudio>=2.1.0
+
+# Audio processing
+librosa==0.10.1
+soundfile==0.12.1
+webrtcvad-wheels==2.0.11.post1
+numpy==1.26.4
+websockets==12.0
+
+# STT (Listen)
+faster-whisper>=1.0.0
+
+# AI Models & LLM (HuggingFace Gemma)
+transformers>=4.38.0
+accelerate>=0.24.1
+# vllm==0.3.0  # (Optional for Linux)
+
+# TTS (Speak) - Disabled by user
+
+# Database
+SQLAlchemy==2.0.23

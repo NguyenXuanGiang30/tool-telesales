@@ -1,0 +1,29 @@
+node_modules/
+build/
+dist/
+dist-electron/
+coverage/
+.pytest_cache/
+.pytest_basetemp/
+.venv/
+.python*/
+.DS_Store
+*.log
+*.apk
+.env*
+!.env.example
+
+# Local runtime state
+*.db
+
+# Python artifacts
+__pycache__/
+*.py[cod]
+
+# Local agent/workspace state
+.agents/
+.codex/
+.worktrees/
+
+# External binary drops
+external/**/*.exe

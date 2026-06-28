@@ -1,0 +1,8 @@
+{
+  "name": "Remix: Remix: Generated1",
+  "description": "",
+  "requestFramePermissions": [
+    "usb"
+  ],
+  "majorCapabilities": []
+}

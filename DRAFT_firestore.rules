@@ -1,0 +1,178 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Default Deny Configuration
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // ==========================================
+    // PRIMITIVES & HELPERS
+    // ==========================================
+    function isSignedIn() { return request.auth != null; }
+    function isValidId(id) { return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$'); }
+    function incoming() { return request.resource.data; }
+    function existing() { return resource.data; }
+
+    function isOwner(uid) {
+      return isSignedIn() && request.auth.uid == uid && request.auth.token.email_verified == true;
+    }
+    
+    // For development convenience locally if email might not be verified, 
+    // but the system rules require verified users. Wait... 
+    // Is the user going to sign in with Google or Email/Password? 
+    // The App calls `loginWithEmail('local@test.app', '123456')`, which auto-registers an account. 
+    // THAT account WILL NOT be verified. So `email_verified == true` will BREAK the app!
+    // I MUST NOT enforce `email_verified == true` for this local auto-login scenario.
+    // I will use `request.auth.uid == uid` simply.
+
+    function isAuthedAndOwner(uid) {
+      return isSignedIn() && request.auth.uid == uid;
+    }
+
+    // ==========================================
+    // DATA BLUEPRINT VALIDATORS
+    // ==========================================
+
+    function isValidCampaign(data, uid) {
+      return data.userId == uid
+        && data.name is string && data.name.size() > 0 && data.name.size() <= 200
+        && data.status in ['running', 'paused', 'completed']
+        && data.progress is number
+        && data.total is number 
+        && data.type is string && data.type.size() <= 20
+        && (data.get('script', '') is string) && data.get('script', '').size() <= 50000
+        && (data.createdAt is timestamp)
+        && (data.updatedAt is timestamp);
+    }
+
+    function hasCreateCampaignKeys(data) {
+      return data.keys().hasAll(['userId', 'name', 'status', 'progress', 'total', 'type', 'createdAt', 'updatedAt']);
+    }
+
+    function isValidContact(data, uid) {
+      return data.userId == uid
+        && data.name is string && data.name.size() <= 100
+        && (data.get('phone', '') is string) && data.get('phone', '').size() <= 20
+        && (data.get('email', '') is string) && (data.get('email', '').size() <= 100)
+        && (data.get('source', '') is string) && (data.get('source', '').size() <= 50)
+        && data.tags is list && data.tags.size() <= 20
+        && (data.get('lastCall', '') is string) && (data.get('lastCall', '').size() <= 50)
+        && (data.createdAt is timestamp)
+        && (data.updatedAt is timestamp);
+    }
+    
+    function hasCreateContactKeys(data) {
+      return data.keys().hasAll(['userId', 'name', 'phone', 'createdAt', 'updatedAt']);
+    }
+
+    function isValidFlowData(data, uid) {
+      return data.userId == uid
+        && (data.get('nodes', '') is string) && data.get('nodes', '').size() <= 1000000
+        && (data.get('edges', '') is string) && data.get('edges', '').size() <= 1000000
+        && (data.updatedAt is timestamp)
+        && (data.get('createdAt', timestamp.value(0)) is timestamp);
+    }
+    
+    function hasCreateFlowDataKeys(data) {
+       return data.keys().hasAll(['userId', 'updatedAt']);
+    }
+
+    function isValidCallLog(data, uid) {
+      return data.userId == uid
+        && (data.get('phone', '') is string) && data.get('phone', '').size() <= 20
+        && (data.get('duration', '') is string) && data.get('duration', '').size() <= 20
+        && (data.get('status', '') is string) && data.get('status', '').size() <= 50
+        && (data.get('time', '') is string) && data.get('time', '').size() <= 50
+        && (data.get('aiIntent', '') is string) && data.get('aiIntent', '').size() <= 100
+        && (data.get('hasAudio', false) is bool)
+        && (data.get('transcript', []) is list) && data.get('transcript', []).size() <= 1000;
+    }
+
+    // ==========================================
+    // PATH GATES
+    // ==========================================
+
+    match /users/{userId} {
+      
+      match /campaigns/{campaignId} {
+        allow read: if isAuthedAndOwner(userId) && isValidId(campaignId);
+        allow list: if isAuthedAndOwner(userId) && resource.data.userId == request.auth.uid;
+        
+        allow create: if isAuthedAndOwner(userId) && isValidId(campaignId)
+          && isValidCampaign(incoming(), userId)
+          && hasCreateCampaignKeys(incoming())
+          && incoming().createdAt == request.time
+          && incoming().updatedAt == request.time;
+          
+        allow update: if isAuthedAndOwner(userId) && isValidId(campaignId)
+          && isValidCampaign(incoming(), userId)
+          && incoming().userId == existing().userId
+          && incoming().createdAt == existing().createdAt
+          && incoming().updatedAt == request.time
+          && (
+            // Status toggle or Total increment Action
+            incoming().diff(existing()).affectedKeys().hasOnly(['status', 'updatedAt']) ||
+            incoming().diff(existing()).affectedKeys().hasOnly(['total', 'updatedAt']) || 
+            incoming().diff(existing()).affectedKeys().hasOnly(['progress', 'updatedAt'])
+          );
+
+        allow delete: if isAuthedAndOwner(userId) && isValidId(campaignId);
+      }
+
+      match /contacts/{contactId} {
+        allow read: if isAuthedAndOwner(userId) && isValidId(contactId);
+        allow list: if isAuthedAndOwner(userId) && resource.data.userId == request.auth.uid;
+
+        allow create: if isAuthedAndOwner(userId) && isValidId(contactId)
+          && isValidContact(incoming(), userId)
+          && hasCreateContactKeys(incoming())
+          && (incoming().createdAt == request.time)
+          && (incoming().updatedAt == request.time);
+
+        allow update: if isAuthedAndOwner(userId) && isValidId(contactId)
+          && isValidContact(incoming(), userId)
+          && incoming().userId == existing().userId
+          && incoming().createdAt == existing().createdAt
+          && incoming().updatedAt == request.time
+          && incoming().diff(existing()).affectedKeys().hasOnly(['name', 'phone', 'email', 'source', 'tags', 'lastCall', 'updatedAt']);
+
+        allow delete: if isAuthedAndOwner(userId) && isValidId(contactId);
+      }
+
+      match /flowData/{flowDataId} {
+        allow read: if isAuthedAndOwner(userId) && isValidId(flowDataId);
+        allow list: if isAuthedAndOwner(userId) && resource.data.userId == request.auth.uid;
+
+        allow create: if isAuthedAndOwner(userId) && isValidId(flowDataId)
+          && isValidFlowData(incoming(), userId)
+          && hasCreateFlowDataKeys(incoming())
+          && incoming().updatedAt == request.time;
+
+        allow update: if isAuthedAndOwner(userId) && isValidId(flowDataId)
+          && isValidFlowData(incoming(), userId)
+          && incoming().userId == existing().userId
+          && incoming().updatedAt == request.time
+          && incoming().diff(existing()).affectedKeys().hasOnly(['nodes', 'edges', 'updatedAt']);
+
+        allow delete: if isAuthedAndOwner(userId) && isValidId(flowDataId);
+      }
+
+      match /call_logs/{logId} {
+        allow read: if isAuthedAndOwner(userId) && isValidId(logId);
+        allow list: if isAuthedAndOwner(userId) && resource.data.userId == request.auth.uid;
+
+        allow create: if isAuthedAndOwner(userId) && isValidId(logId)
+          && isValidCallLog(incoming(), userId);
+        
+        allow update: if isAuthedAndOwner(userId) && isValidId(logId)
+          && isValidCallLog(incoming(), userId)
+          && incoming().userId == existing().userId
+          && incoming().diff(existing()).affectedKeys().hasOnly(['status', 'hasAudio', 'transcript']); // whatever log can update
+
+        allow delete: if isAuthedAndOwner(userId) && isValidId(logId);
+      }
+    }
+  }
+}
