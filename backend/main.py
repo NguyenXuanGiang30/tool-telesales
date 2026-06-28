@@ -77,10 +77,10 @@ async def lifespan(app: FastAPI):
     # Khởi động WebSocket Control Server
     await control_server.start()
     
-    # Khởi động các cổng nghe UDP cho tối đa 5 máy S9 (S9_01 -> S9_05) trên cổng 50001 -> 50005
+    # Khởi động các cổng nghe UDP cho tối đa 5 máy S9 (S9_01 -> S9_05) trên cổng 35001 -> 35005
     for i in range(1, 6):
         device_id = f"S9_{i:02d}"
-        port = 50000 + i
+        port = 35000 + i
         session = S9AudioSession(device_id, port)
         session.start()
         s9_sessions[device_id] = session
