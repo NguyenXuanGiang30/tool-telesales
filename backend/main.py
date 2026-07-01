@@ -32,19 +32,28 @@ from ws_server import control_server
 from audio_receiver import UDPAudioReceiver
 
 # --- CÁC THƯ VIỆN AI THỰC TẾ ---
-import torch
-import torchaudio
-import webrtcvad
-from faster_whisper import WhisperModel
-from transformers import AutoModelForCausalLM, AutoTokenizer
+try:
+    import torch
+    import torchaudio
+    import webrtcvad
+    from faster_whisper import WhisperModel
+    from transformers import AutoModelForCausalLM, AutoTokenizer
+    HAS_AI_LIBS = True
+    device = "cuda" if torch.cuda.is_available() else "cpu"
+except ImportError:
+    HAS_AI_LIBS = False
+    device = "cpu"
 
-device = "cuda" if torch.cuda.is_available() else "cpu"
 whisper_model = None
 tokenizer = None
 llm_model = None
 
 def load_ai_models():
     global whisper_model, tokenizer, llm_model
+    if not HAS_AI_LIBS:
+        print("========== KHỞI ĐỘNG HỆ THỐNG Ở CHẾ ĐỘ THƯỜNG (KHÔNG TẢI AI) ==========")
+        print("[Lưu ý] Để chạy AI local, vui lòng chạy: pip install torch torchvision torchaudio transformers faster-whisper")
+        return
     print(f"========== KHỞI ĐỘNG HỆ THỐNG AI TẠI {device.upper()} ==========")
     try:
         print("[1/2] Đang tải mô hình Faster-Whisper (tiny)...")
