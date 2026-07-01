@@ -124,14 +124,20 @@ app.add_middleware(
 # Đã tháo bỏ TTS theo yêu cầu của user
 
 # Khởi tạo VAD
-vad = webrtcvad.Vad(3) # Mức độ lọc nhiễu mạnh nhất (0-3)
+if HAS_AI_LIBS:
+    vad = webrtcvad.Vad(3) # Mức độ lọc nhiễu mạnh nhất (0-3)
+else:
+    class MockVad:
+        def set_mode(self, mode): pass
+        def is_speech(self, frame, sample_rate): return True
+    vad = MockVad()
 
 @app.get("/health")
 def health_check():
     return {
         "status": "ok", 
         "message": "AI Backend đã gỡ bỏ TTS, chạy cơ chế Phát file ghi âm có sẵn.",
-        "gpu_available": torch.cuda.is_available()
+        "gpu_available": torch.cuda.is_available() if HAS_AI_LIBS else False
     }
 
 @app.get("/api/hardware")
@@ -140,7 +146,7 @@ def hardware_stats():
     cpu_percent = psutil.cpu_percent(interval=0.1)
     gpu_name, gpu_vram_total_gb, gpu_vram_used_gb, gpu_percent = "No GPU Detected", 0.0, 0.0, 0.0
     
-    if torch.cuda.is_available():
+    if HAS_AI_LIBS and torch.cuda.is_available():
         gpu_name = torch.cuda.get_device_name(0)
         gpu_vram_total_gb = torch.cuda.get_device_properties(0).total_memory / (1024**3)
         gpu_vram_used_gb = torch.cuda.memory_allocated(0) / (1024**3)
