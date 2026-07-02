@@ -112,4 +112,16 @@ class GatewayClient {
       return false;
     }
   }
+
+  Future<bool> completeCall(String callId) async {
+    try {
+      final response = await http.post(
+        Uri.parse('$baseUrl/calls/$callId/complete'),
+        headers: _jsonHeaders(),
+      );
+      return response.statusCode == 200;
+    } catch (_) {
+      return false;
+    }
+  }
 }

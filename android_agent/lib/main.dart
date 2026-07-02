@@ -348,6 +348,28 @@ class _AgentHomeScreenState extends State<AgentHomeScreen> {
                 ),
               ],
             ),
+            const SizedBox(height: 16),
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton.icon(
+                onPressed: () async {
+                  final granted = await _controller.checkPermissions();
+                  if (!granted) {
+                    await _controller.requestPermissions();
+                  } else {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('Telephony permissions already granted.')),
+                    );
+                  }
+                },
+                icon: const Icon(Icons.security),
+                label: const Text('REQUEST CALL PERMISSIONS'),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.teal[700],
+                  foregroundColor: Colors.white,
+                ),
+              ),
+            ),
           ],
         ),
       ),

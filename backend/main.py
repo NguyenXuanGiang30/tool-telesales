@@ -14,6 +14,7 @@ import psutil
 import subprocess
 from datetime import datetime
 from typing import Optional, Union
+import httpx
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect, File, UploadFile, Form
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
@@ -24,7 +25,7 @@ from sqlalchemy.orm import Session
 from fastapi import APIRouter, Depends, HTTPException
 from gsm_module import ModernGsmModem, list_ports
 
-from database import init_db, get_db, Campaign, Contact, CallLog, Setting, User, FlowData
+from database import init_db, get_db, SessionLocal, Campaign, Contact, CallLog, Setting, User, FlowData, Device
 from gateway.api import gateway_api_router
 
 # --- THÊM IMPORT ĐIỀU KHIỂN BOXPHONE ---
@@ -76,12 +77,62 @@ def load_ai_models():
         tokenizer = None
         llm_model = None
 
+async def periodic_device_cleanup():
+    """
+    Nhiệm vụ nền chạy mỗi 5 giây để kiểm tra và tự động dọn dẹp/cập nhật trạng thái thiết bị:
+    1. Gateway Registry: đánh dấu thiết bị quá hạn heartbeat là OFFLINE.
+    2. Boxphone Database: nếu thiết bị trong database có status là "busy" hoặc "idle" nhưng websocket control server không có connection,
+       cập nhật status về "offline".
+    """
+    from gateway.api import device_registry, state_store, _persist_gateway_state
+    
+    while True:
+        try:
+            await asyncio.sleep(5)
+            
+            # --- 1. Gateway Registry Cleanup ---
+            stale_gateway_devices = device_registry.mark_stale_devices_offline()
+            if stale_gateway_devices:
+                print(f"[BG Cleanup] Thiết bị Gateway mất heartbeat, đã chuyển offline: {stale_gateway_devices}")
+                _persist_gateway_state()
+            
+            # --- 2. Boxphone Database Cleanup ---
+            db = SessionLocal()
+            try:
+                devices = db.query(Device).all()
+                for device in devices:
+                    is_connected_ws = device.id in control_server.active_connections
+                    if not is_connected_ws and device.status != "offline":
+                        print(f"[BG Cleanup] Phát hiện thiết bị Boxphone {device.id} ngắt kết nối websocket đột ngột. Chuyển sang offline.")
+                        device.status = "offline"
+                        db.commit()
+            except Exception as e:
+                print(f"[BG Cleanup] Lỗi khi dọn dẹp Boxphone: {e}")
+            finally:
+                db.close()
+                
+        except asyncio.CancelledError:
+            break
+        except Exception as e:
+            print(f"[BG Cleanup] Lỗi ngoại lệ trong nhiệm vụ nền: {e}")
+
 s9_sessions = {}
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Khởi tạo bảng CSDL khi khởi động Server
     init_db()
+    
+    # Đặt lại trạng thái tất cả thiết bị Boxphone cũ trong database về "offline" lúc khởi động
+    db = SessionLocal()
+    try:
+        db.query(Device).update({Device.status: "offline"})
+        db.commit()
+        print("[Lifespan] Đã đặt lại trạng thái các thiết bị cũ về 'offline'.")
+    except Exception as e:
+        print(f"[Lifespan] Lỗi đặt lại trạng thái thiết bị: {e}")
+    finally:
+        db.close()
     
     # Khởi động WebSocket Control Server
     await control_server.start()
@@ -97,9 +148,19 @@ async def lifespan(app: FastAPI):
 
     # Khởi tạo AI models bất đồng bộ để tránh block uvicorn startup
     await asyncio.to_thread(load_ai_models)
+    
+    # Khởi động tác vụ dọn dẹp định kỳ
+    bg_task = asyncio.create_task(periodic_device_cleanup())
+    
     yield
     
     # Dọn dẹp khi tắt Server
+    bg_task.cancel()
+    try:
+        await bg_task
+    except asyncio.CancelledError:
+        pass
+        
     await control_server.stop()
     for session in s9_sessions.values():
         session.stop()
@@ -194,6 +255,76 @@ Chỉ in ra đúng 1 MÃ:
     
     intent_code = tokenizer.decode(outputs[0], skip_special_tokens=True).split("model\n")[-1].strip()
     return intent_code
+
+def has_gemini_key() -> bool:
+    if os.environ.get("GEMINI_API_KEY"):
+        return True
+    db = SessionLocal()
+    try:
+        setting = db.query(Setting).filter(Setting.key == "gemini_api_key").first()
+        return bool(setting and setting.value)
+    except Exception:
+        return False
+    finally:
+        db.close()
+
+async def run_gemini(user_text: str) -> str:
+    api_key = os.environ.get("GEMINI_API_KEY")
+    if not api_key:
+        db = SessionLocal()
+        try:
+            setting = db.query(Setting).filter(Setting.key == "gemini_api_key").first()
+            api_key = setting.value if setting else None
+        except Exception:
+            pass
+        finally:
+            db.close()
+
+    if not api_key:
+        print("[Gemini] Lỗi: Chưa cấu hình GEMINI_API_KEY")
+        return "DEFAULT"
+
+    url = f"https://generativelanguage.googleapis.com/v1/models/gemini-2.5-flash:generateContent?key={api_key}"
+    
+    prompt = f"""Bạn là bộ phân loại ý định khách hàng trong hệ thống tổng đài telesales tự động.
+Nhiệm vụ: Phân tích câu nói của khách hàng và chỉ trả về DUY NHẤT 1 MÃ (ID) tương ứng để hệ thống bật file ghi âm.
+Không thêm bất kỳ chữ nào khác ngoài mã này.
+
+Các mã cho phép:
+- CHAO_HOI (Khách nói alo, xin chào, hoặc bắt đầu cuộc hội thoại)
+- LAI_SUAT (Khách hỏi về lãi suất vay, phí vay, lãi suất bao nhiêu)
+- THE_CHAP (Khách hỏi về tài sản thế chấp, vay thế chấp, tài sản đảm bảo)
+- TU_CHOI (Khách bảo không có nhu cầu, bận, không quan tâm, cúp máy đi)
+- FORWARD (Khách đòi gặp nhân viên, gặp tổng đài viên, gặp người thật)
+- KHONG_HIEU (Các trường hợp khác)
+
+Khách nói: "{user_text}"
+Chỉ in ra đúng 1 MÃ duy nhất:"""
+
+    try:
+        async with httpx.AsyncClient() as client:
+            response = await client.post(
+                url,
+                json={
+                    "contents": [{"parts": [{"text": prompt}]}],
+                    "generationConfig": {
+                        "temperature": 0.1,
+                        "maxOutputTokens": 1000
+                    }
+                },
+                timeout=10.0
+            )
+            if response.status_code == 200:
+                data = response.json()
+                intent = data["candidates"][0]["content"]["parts"][0]["text"].strip()
+                intent = intent.replace('"', '').replace("'", "").strip().upper()
+                return intent
+            else:
+                print(f"[Gemini API Error] Status: {response.status_code}, Body: {response.text}")
+                return "DEFAULT"
+    except Exception as e:
+        print(f"[Gemini Exception]: {e}")
+        return "DEFAULT"
 
 def get_prerecorded_audio(intent_code):
     """
@@ -309,8 +440,11 @@ class S9AudioSession:
         if not user_text:
             return
             
-        # 2. Phân loại Ý định bằng Gemma-2
-        intent_code = await asyncio.to_thread(run_gemma, user_text)
+        # 2. Phân loại Ý định bằng Gemma-2 hoặc Gemini API
+        if has_gemini_key():
+            intent_code = await run_gemini(user_text)
+        else:
+            intent_code = await asyncio.to_thread(run_gemma, user_text)
         print(f"[{self.device_id} Intent]: {intent_code}")
         
         # 3. Lấy file ghi âm phản hồi
@@ -324,6 +458,19 @@ class S9AudioSession:
             self.receiver.send_audio(chunk)
             await asyncio.sleep(0.02)
         print(f"[{self.device_id}] Đã hoàn thành phát âm thanh phản hồi.")
+        
+        # 5. Nếu là ý định dập máy (TU_CHOI) hoặc chuyển tiếp cuộc gọi (FORWARD), tiến hành dập máy thiết bị
+        if intent_code in ["FORWARD", "TU_CHOI"]:
+            print(f"[{self.device_id}] Trực tiếp gửi lệnh dập máy (HANGUP) về thiết bị S9...")
+            await control_server.send_command(self.device_id, "HANGUP")
+            
+            # Giải phóng thiết bị trong CSDL ngay lập tức làm phương án dự phòng
+            from call_router import call_router
+            db = SessionLocal()
+            try:
+                call_router.release_device(db, self.device_id)
+            finally:
+                db.close()
 
 
 # =======================================================
@@ -536,6 +683,20 @@ def get_call_logs(db: Session = Depends(get_db)):
 def get_settings(db: Session = Depends(get_db)):
     return [setting_to_dict(s) for s in db.query(Setting).all()]
 
+class SettingPayload(BaseModel):
+    value: str
+
+@api_router.post("/settings/{key}")
+def save_setting(key: str, payload: SettingPayload, db: Session = Depends(get_db)):
+    setting = db.query(Setting).filter(Setting.key == key).first()
+    if setting:
+        setting.value = payload.value
+    else:
+        setting = Setting(key=key, value=payload.value)
+        db.add(setting)
+    db.commit()
+    return {"key": key, "value": payload.value}
+
 @api_router.get("/gsm/ports")
 def get_gsm_ports():
     if list_ports is None:
@@ -632,7 +793,10 @@ async def process_voice_turn(websocket: WebSocket, voice_buffer: bytearray) -> b
         return False
     
     # 2. LLM trả về Mã ID kịch bản
-    intent_code = await asyncio.to_thread(run_gemma, user_text)
+    if has_gemini_key():
+        intent_code = await run_gemini(user_text)
+    else:
+        intent_code = await asyncio.to_thread(run_gemma, user_text)
     print(f"[LLM Intent]: {intent_code}")
     await send_ws_json(websocket, "intent", "text", f"Mã kịch bản: {intent_code}")
     await send_ws_json(websocket, "status", "text", "SPEAKING")

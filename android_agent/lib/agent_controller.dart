@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart';
 import 'gateway_client.dart';
 
 enum AgentState {
@@ -14,6 +15,8 @@ enum AgentState {
 }
 
 class AgentController extends ChangeNotifier {
+  static const platform = MethodChannel('com.autocall.gateway/telephony');
+
   String gatewayUrl = 'http://10.0.2.2:8000/api/v1';
   String deviceId = 'S9_AGENT_01';
   String deviceToken = '';
@@ -212,12 +215,26 @@ class AgentController extends ChangeNotifier {
     }
   }
 
-  void _simulateTelephonyCall(String callId, String phoneNumber) {
+  Future<void> _simulateTelephonyCall(String callId, String phoneNumber) async {
     _activeCallId = callId;
     _activePhoneNumber = phoneNumber;
     _state = AgentState.dialing;
-    addLog('Telephony state: DIALING $phoneNumber');
+    addLog('Telephony state: DIALING $phoneNumber (SIM Slot: $simSlot)');
     notifyListeners();
+
+    try {
+      final bool? success = await platform.invokeMethod<bool>('makeCall', {
+        'phoneNumber': phoneNumber,
+        'simSlot': simSlot,
+      });
+      if (success == true) {
+        addLog('Real GSM call successfully triggered for $phoneNumber via SIM $simSlot');
+      } else {
+        addLog('Real GSM call returned failure, falling back to mock simulator.');
+      }
+    } catch (e) {
+      addLog('Failed to place real GSM call: $e. Falling back to mock simulator.');
+    }
 
     // Transition: DIALING -> RINGING after 1.5s
     Timer(const Duration(milliseconds: 1500), () {
@@ -237,6 +254,24 @@ class AgentController extends ChangeNotifier {
         _simulateSpeechSequence(callId);
       });
     });
+  }
+
+  Future<bool> checkPermissions() async {
+    try {
+      final bool? granted = await platform.invokeMethod<bool>('checkPermissions');
+      return granted ?? false;
+    } catch (e) {
+      return false;
+    }
+  }
+
+  Future<void> requestPermissions() async {
+    try {
+      await platform.invokeMethod('requestPermissions');
+      addLog('Requested telephony permissions.');
+    } catch (e) {
+      addLog('Failed to request permissions: $e');
+    }
   }
 
   void _simulateSpeechSequence(String callId) {
@@ -260,6 +295,14 @@ class AgentController extends ChangeNotifier {
       addLog('Audio Rx Frame: (AI TTS closing hangup turn received from Gateway)');
       _state = AgentState.completed;
       addLog('Telephony state: DISCONNECTED (completed)');
+      
+      final completedCallId = _activeCallId;
+      if (completedCallId != null) {
+        _client?.completeCall(completedCallId).then((success) {
+          addLog('Gateway completeCall reported: $success');
+        });
+      }
+      
       _activeCallId = null;
       _activePhoneNumber = null;
       notifyListeners();
@@ -268,6 +311,12 @@ class AgentController extends ChangeNotifier {
 
   void _hangupCall() {
     _state = AgentState.idle;
+    final completedCallId = _activeCallId;
+    if (completedCallId != null) {
+      _client?.completeCall(completedCallId).then((success) {
+        addLog('Gateway completeCall reported on HANGUP: $success');
+      });
+    }
     _activeCallId = null;
     _activePhoneNumber = null;
     addLog('Call hung up manually/via remote HANGUP command');
